@@ -7,4 +7,4 @@ Some of the Planned features include:
 2. Automix.
 3. Android Auto compatability.
 
-**Current State of Development: Designing the UI**
+**Current State of Development:** Designing the UI
