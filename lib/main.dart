@@ -1,121 +1,186 @@
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+/// Handles background audio playback and system-level media controls.
+class WhiteRoseAudioHandler extends BaseAudioHandler with SeekHandler {
+  final _player = AudioPlayer();
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  WhiteRoseAudioHandler() {
+    _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+  }
 
-  // This widget is the root of your application.
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+  Future<void> play() => _player.play();
+
+  @override
+  Future<void> pause() => _player.pause();
+
+  @override
+  Future<void> playMediaItem(MediaItem item) async {
+    mediaItem.add(item);
+    await _player.setAudioSource(AudioSource.uri(Uri.parse(item.id)));
+    _player.play();
+  }
+
+  PlaybackState _transformEvent(PlaybackEvent event) {
+    return PlaybackState(
+      controls: [
+        MediaControl.skipToPrevious,
+        if (_player.playing) MediaControl.pause else MediaControl.play,
+        MediaControl.stop,
+        MediaControl.skipToNext,
+      ],
+      systemActions: const {MediaAction.seek},
+      androidCompactActionIndices: const [0, 1, 3],
+      playing: _player.playing,
+      updatePosition: _player.position,
+      processingState: const {
+        ProcessingState.idle: AudioProcessingState.idle,
+        ProcessingState.loading: AudioProcessingState.loading,
+        ProcessingState.ready: AudioProcessingState.ready,
+        ProcessingState.completed: AudioProcessingState.completed,
+      }[_player.processingState]!,
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+late AudioHandler _audioHandler;
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
+  // Initialize the audio service for background playback
+  _audioHandler = await AudioService.init(
+    builder: () => WhiteRoseAudioHandler(),
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.whiterose.audio',
+      androidNotificationChannelName: 'White Rose Playback',
+    ),
+  );
 
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  // Execute the newly named root class
+  runApp(const whiterose());
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+/// The root application widget.
+/// Class name strictly set to [whiterose] to match the test directory constraints.
+class whiterose extends StatelessWidget {
+  const whiterose({super.key});
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        scaffoldBackgroundColor: const Color(0xFFFDFDFD),
+        textTheme: GoogleFonts.lustriaTextTheme(),
+      ),
+      home: const HomeScreen(),
+    );
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final OnAudioQuery _audioQuery = OnAudioQuery();
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermissions();
+  }
+
+  /// Requests storage permissions required to scan the device for audio files.
+  void _checkPermissions() async {
+    await Permission.storage.request();
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          "WHITE ROSE",
+          style: GoogleFonts.lustria(
+            letterSpacing: 4,
+            fontSize: 20,
+            color: Colors.black87,
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      body: FutureBuilder<List<SongModel>>(
+        future: _audioQuery.querySongs(
+          sortType: SongSortType.ARTIST,
+          orderType: OrderType.ASC_OR_SMALLER,
+          uriType: UriType.EXTERNAL,
+        ),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData)
+            return const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 1,
+                color: Colors.black,
+              ),
+            );
+          if (snapshot.data!.isEmpty)
+            return const Center(child: Text("No localized audio found."));
+
+          return ListView.builder(
+            itemCount: snapshot.data!.length,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            itemBuilder: (context, index) {
+              final song = snapshot.data![index];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 15),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(2),
+                  border: Border.all(color: Colors.black.withOpacity(0.05)),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(12),
+                  title: Text(
+                    song.title,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  subtitle: Text(
+                    song.artist ?? "Unknown",
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  trailing: const Icon(
+                    Icons.play_arrow_outlined,
+                    size: 20,
+                    color: Colors.black54,
+                  ),
+                  onTap: () {
+                    _audioHandler.playMediaItem(
+                      MediaItem(
+                        id: song.uri!,
+                        album: song.album,
+                        title: song.title,
+                        artist: song.artist,
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
