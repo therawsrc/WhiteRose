@@ -3,7 +3,6 @@ import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 /// Handles background audio playback and system-level media controls.
 class WhiteRoseAudioHandler extends BaseAudioHandler with SeekHandler {
@@ -102,8 +101,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Requests storage permissions required to scan the device for audio files.
   void _checkPermissions() async {
-    await Permission.storage.request();
-    setState(() {});
+    // Utilizes the explicit native permission bridge for both iOS and Android
+    bool hasPermission = await _audioQuery.checkAndRequest(retryRequest: true);
+
+    // Rebuilds the UI to trigger the FutureBuilder only after permission is explicitly granted
+    if (hasPermission && mounted) {
+      setState(() {});
+    }
   }
 
   @override
