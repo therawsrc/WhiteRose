@@ -1,14 +1,14 @@
-name: iOS Release Pipeline
+name: iOS Unsigned IPA Pipeline
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch: # Allows manual execution from the GitHub interface
+  workflow_dispatch:
 
 jobs:
   build-ios:
-    name: Build iOS IPA
+    name: Build Unsigned iOS IPA
     runs-on: macos-latest
 
     steps:
@@ -20,18 +20,28 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Install Flutter Dependencies
+      - name: Install Dependencies
         run: flutter pub get
 
-      # NOTE: For an installable IPA, you must configure code signing here.
-      # This requires Base64 encoded certificates stored in GitHub Secrets.
-      # Without code signing, the build process will generate an unsigned archive.
-
-      - name: Build iOS Application
+      - name: Build iOS Archive (Unsigned)
         run: flutter build ipa --release --no-codesign
 
-      - name: Upload Build Artifact
+      - name: Package Application into Unsigned IPA
+        run: |
+          # Navigate to the directory containing the compiled .app
+          cd build/ios/archive/Runner.xcarchive/Products/Applications
+          
+          # Create the required Payload directory structure
+          mkdir Payload
+          
+          # Move the compiled application into the Payload directory
+          mv Runner.app Payload/
+          
+          # Compress the Payload directory into the final .ipa format
+          zip -r ../../../../../whiterose-unsigned.ipa Payload
+
+      - name: Upload Unsigned IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build-artifact
-          path: build/ios/archive/Runner.xcarchive
+          name: whiterose-unsigned-ipa
+          path: build/ios/whiterose-unsigned.ipa
